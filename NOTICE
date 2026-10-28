@@ -1,0 +1,12 @@
+Source and Authorization
+
+The method weaving, AST visitors, and join-point runtime in this component were
+migrated from super-kernel/mimic, derived from wheakerd's repository:
+https://github.com/wheakerd/mimic
+
+Source revision: 443ad3e4a2c8dd9ce7b6028b0b7aea163be4e47d
+
+wheakerd authorized importing and adapting that source into super-kernel/mimic,
+and requested migration of the aspect-related capabilities to super-kernel/aop.
+
+wheakerd has designated the MIT License for super-kernel/aop. See LICENSE.

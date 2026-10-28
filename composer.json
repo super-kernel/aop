@@ -1,0 +1,40 @@
+{
+    "name": "super-kernel/aop",
+    "description": "Aspect declarations, method weaving, join points, and interceptor dispatch through Mimic for SuperKernel.",
+    "type": "library",
+    "license": "MIT",
+    "require": {
+        "php": ">=8.4.27 <8.5",
+        "ext-reflection": "*",
+        "nikic/php-parser": "^5.9.0",
+        "psr/container": "^2.0.2",
+        "super-kernel/annotator": "dev-main",
+        "super-kernel/attribute": "dev-main",
+        "super-kernel/contract": "dev-main",
+        "super-kernel/event": "dev-main",
+        "super-kernel/mimic": "dev-main"
+    },
+    "require-dev": {
+        "friendsofphp/php-cs-fixer": "^3.95.27",
+        "phpunit/phpunit": "^13.4.3",
+        "super-kernel/autoloader": "dev-main",
+        "super-kernel/event-dispatcher": "dev-main"
+    },
+    "autoload": {
+        "psr-4": {
+            "SuperKernel\\Aop\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "SuperKernel\\Aop\\Tests\\": "tests/"
+        }
+    },
+    "scripts": {
+        "format": "@php vendor/bin/php-cs-fixer fix --show-progress=bar --no-ansi",
+        "format:check": "@php vendor/bin/php-cs-fixer check --show-progress=bar --no-ansi --diff",
+        "test": "@php vendor/bin/phpunit"
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true
+}
