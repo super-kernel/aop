@@ -12,7 +12,6 @@ use function constant;
 use function define;
 use function defined;
 use function dirname;
-use function hash;
 use function realpath;
 
 /** Binds original source locations before proxies evaluate constant expressions. */
@@ -39,33 +38,31 @@ final readonly class SourceMetadata
             throw new RuntimeException("The package graph has no original source for $class.");
         }
 
-        $this->bind(self::fileConstant($sourcePath), $sourcePath);
-        $this->bind(self::directoryConstant($sourcePath), dirname($sourcePath));
+        foreach ([
+            SourceConstantName::file($sourcePath)      => $sourcePath,
+            SourceConstantName::directory($sourcePath) => dirname($sourcePath),
+        ] as $name => $value) {
+            if (defined($name)) {
+                if (constant($name) !== $value) {
+                    throw new LogicException("The original source constant $name is already defined.");
+                }
+
+                continue;
+            }
+
+            define($name, $value);
+        }
     }
 
     /** @return non-empty-string */
     public static function fileConstant(string $sourcePath): string
     {
-        return __NAMESPACE__ . '\\Source\\F' . hash('sha256', $sourcePath) . '\\FILE';
+        return SourceConstantName::file($sourcePath);
     }
 
     /** @return non-empty-string */
     public static function directoryConstant(string $sourcePath): string
     {
-        return __NAMESPACE__ . '\\Source\\F' . hash('sha256', $sourcePath) . '\\DIRECTORY';
-    }
-
-    /** @throws LogicException When another value already occupies the generated constant name */
-    private function bind(string $name, string $value): void
-    {
-        if (defined($name)) {
-            if (constant($name) !== $value) {
-                throw new LogicException("The original source constant $name is already defined.");
-            }
-
-            return;
-        }
-
-        define($name, $value);
+        return SourceConstantName::directory($sourcePath);
     }
 }

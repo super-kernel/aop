@@ -17,6 +17,11 @@ use function preg_match;
 #[Attribute(Attribute::TARGET_CLASS)]
 final readonly class Aspect
 {
+    private const string CLASS_NAME_PATTERN = '/\A\\\\?[a-zA-Z_\x80-\xff][a-zA-Z0-9_\x80-\xff]*'
+        . '(?:\\\\[a-zA-Z_\x80-\xff][a-zA-Z0-9_\x80-\xff]*)*\z/';
+
+    private const string MEMBER_NAME_PATTERN = '/\A[a-zA-Z_\x80-\xff][a-zA-Z0-9_\x80-\xff]*\z/';
+
     /**
      * Target names are validated without loading or reflecting their classes.
      *
@@ -37,28 +42,44 @@ final readonly class Aspect
         }
 
         foreach ($classes as $class) {
-            self::assertClassName($class);
+            if (!is_string($class) || 1 !== preg_match(self::CLASS_NAME_PATTERN, $class)) {
+                throw new InvalidArgumentException('Aspect targets must be valid class names.');
+            }
         }
 
         foreach ($methods as $class => $names) {
-            self::assertClassName($class);
-            self::assertNonEmptyList($names, 'Aspect methods');
+            if (!is_string($class) || 1 !== preg_match(self::CLASS_NAME_PATTERN, $class)) {
+                throw new InvalidArgumentException('Aspect targets must be valid class names.');
+            }
+
+            if (!is_array($names) || [] === $names || !array_is_list($names)) {
+                throw new InvalidArgumentException('Aspect methods must be a non-empty list.');
+            }
 
             foreach ($names as $name) {
-                self::assertMemberName($name, 'Method');
+                if (!is_string($name) || 1 !== preg_match(self::MEMBER_NAME_PATTERN, $name)) {
+                    throw new InvalidArgumentException('Method targets must be valid member names.');
+                }
             }
         }
 
         foreach ($propertyHooks as $class => $properties) {
-            self::assertClassName($class);
+            if (!is_string($class) || 1 !== preg_match(self::CLASS_NAME_PATTERN, $class)) {
+                throw new InvalidArgumentException('Aspect targets must be valid class names.');
+            }
 
             if (!is_array($properties) || [] === $properties) {
                 throw new InvalidArgumentException('Aspect property hooks must map property names to hook lists.');
             }
 
             foreach ($properties as $property => $hooks) {
-                self::assertMemberName($property, 'Property');
-                self::assertNonEmptyList($hooks, 'Property hooks');
+                if (!is_string($property) || 1 !== preg_match(self::MEMBER_NAME_PATTERN, $property)) {
+                    throw new InvalidArgumentException('Property targets must be valid member names.');
+                }
+
+                if (!is_array($hooks) || [] === $hooks || !array_is_list($hooks)) {
+                    throw new InvalidArgumentException('Property hooks must be a non-empty list.');
+                }
 
                 foreach ($hooks as $hook) {
                     if (!in_array($hook, [
@@ -69,30 +90,6 @@ final readonly class Aspect
                     }
                 }
             }
-        }
-    }
-
-    private static function assertClassName(mixed $class): void
-    {
-        $pattern = '/\A\\\\?[a-zA-Z_\x80-\xff][a-zA-Z0-9_\x80-\xff]*'
-            . '(?:\\\\[a-zA-Z_\x80-\xff][a-zA-Z0-9_\x80-\xff]*)*\z/';
-
-        if (!is_string($class) || 1 !== preg_match($pattern, $class)) {
-            throw new InvalidArgumentException('Aspect targets must be valid class names.');
-        }
-    }
-
-    private static function assertMemberName(mixed $name, string $kind): void
-    {
-        if (!is_string($name) || 1 !== preg_match('/\A[a-zA-Z_\x80-\xff][a-zA-Z0-9_\x80-\xff]*\z/', $name)) {
-            throw new InvalidArgumentException($kind . ' targets must be valid member names.');
-        }
-    }
-
-    private static function assertNonEmptyList(mixed $values, string $kind): void
-    {
-        if (!is_array($values) || [] === $values || !array_is_list($values)) {
-            throw new InvalidArgumentException($kind . ' must be a non-empty list.');
         }
     }
 }

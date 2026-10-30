@@ -7,8 +7,8 @@ namespace SuperKernel\Aop\Listener;
 use Psr\Container\ContainerExceptionInterface;
 use Psr\Container\ContainerInterface;
 use SuperKernel;
-use SuperKernel\Aop\AutoLoader;
 use SuperKernel\Aop\Collector\AspectCollector;
+use SuperKernel\Aop\Startup\AutoLoaderResolution;
 use SuperKernel\Attribute\Listener;
 use SuperKernel\Contract\ListenerInterface;
 use SuperKernel\Event\BeforeApplicationStart;
@@ -42,13 +42,6 @@ final readonly class BeforeApplicationStartListener implements ListenerInterface
             return;
         }
 
-        $this->loader()->register();
+        AutoLoaderResolution::resolve($this->container)->register();
     }
-
-    /** @throws ContainerExceptionInterface When the aspect loader cannot be resolved */
-    private function loader(): AutoLoader
-    {
-        return $this->container->get(AutoLoader::class);
-    }
-
 }
