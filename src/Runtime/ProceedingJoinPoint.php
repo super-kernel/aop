@@ -9,10 +9,6 @@ use ReflectionClass;
 use ReflectionMethod;
 use SuperKernel\Aop\Contract\ProceedingJoinPointInterface;
 
-use function is_string;
-use function strrpos;
-use function substr;
-
 final readonly class ProceedingJoinPoint implements ProceedingJoinPointInterface
 {
     /**
@@ -33,7 +29,10 @@ final readonly class ProceedingJoinPoint implements ProceedingJoinPointInterface
 
     public function getMethodReflection(): ReflectionMethod
     {
-        return new ReflectionMethod($this->getTargetClass(), $this->getShortMethodName());
+        return new ReflectionMethod(
+            JoinPointTarget::className($this->instance),
+            JoinPointTarget::shortMethodName($this->methodName),
+        );
     }
 
     public function getArguments(): array
@@ -53,19 +52,11 @@ final readonly class ProceedingJoinPoint implements ProceedingJoinPointInterface
 
     public function getClassReflection(): ReflectionClass
     {
-        return new ReflectionClass($this->getTargetClass());
-    }
-
-    /** @return class-string */
-    private function getTargetClass(): string
-    {
-        return is_string($this->instance) ? $this->instance : $this->instance::class;
+        return new ReflectionClass(JoinPointTarget::className($this->instance));
     }
 
     public function getShortMethodName(): string
     {
-        $separator = strrpos($this->methodName, '::');
-
-        return false === $separator ? $this->methodName : substr($this->methodName, $separator + 2);
+        return JoinPointTarget::shortMethodName($this->methodName);
     }
 }

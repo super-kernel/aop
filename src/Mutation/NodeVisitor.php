@@ -43,7 +43,28 @@ final class NodeVisitor extends NodeVisitorAbstract
             return null;
         }
 
-        $this->assertSupported($node);
+        if ($node->byRef) {
+            throw new LogicException('AOP does not support methods returning by reference.');
+        }
+
+        foreach ($node->params as $param) {
+            if ($param->byRef || $param->variadic || [] !== $param->hooks) {
+                throw new LogicException('AOP does not support reference, variadic, or hooked promoted parameters.');
+            }
+        }
+
+        $unsupported = new NodeFinder()->findFirst($node->stmts, static fn(
+            Node $candidate,
+        ): bool => $candidate instanceof Expr\Yield_ || $candidate instanceof Expr\YieldFrom
+            || $candidate instanceof Stmt\Static_ || $candidate instanceof Scalar\MagicConst\Function_
+            || $candidate instanceof Scalar\MagicConst\Method || $candidate instanceof Scalar\MagicConst\Line);
+
+        if (null !== $unsupported) {
+            throw new LogicException(
+                'AOP cannot preserve generators, static locals, or method/line magic constants.',
+            );
+        }
+
         $statements = [];
 
         foreach ($node->stmts as $statement) {
@@ -92,30 +113,5 @@ final class NodeVisitor extends NodeVisitorAbstract
         ];
 
         return $node;
-    }
-
-    private function assertSupported(Stmt\ClassMethod $method): void
-    {
-        if ($method->byRef) {
-            throw new LogicException('AOP does not support methods returning by reference.');
-        }
-
-        foreach ($method->params as $param) {
-            if ($param->byRef || $param->variadic || [] !== $param->hooks) {
-                throw new LogicException('AOP does not support reference, variadic, or hooked promoted parameters.');
-            }
-        }
-
-        $unsupported = new NodeFinder()->findFirst($method->stmts ?? [], static fn(
-            Node $node,
-        ): bool => $node instanceof Expr\Yield_ || $node instanceof Expr\YieldFrom || $node instanceof Stmt\Static_
-            || $node instanceof Scalar\MagicConst\Function_ || $node instanceof Scalar\MagicConst\Method
-            || $node instanceof Scalar\MagicConst\Line);
-
-        if (null !== $unsupported) {
-            throw new LogicException(
-                'AOP cannot preserve generators, static locals, or method/line magic constants.',
-            );
-        }
     }
 }

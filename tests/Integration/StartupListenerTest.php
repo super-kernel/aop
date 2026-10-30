@@ -214,7 +214,7 @@ final class StartupListenerTest extends TestCase
         ]), $container);
 
         $this->expectException(TypeError::class);
-        $this->expectExceptionMessageIsOrContains('BeforeApplicationStartListener::loader()');
+        $this->expectExceptionMessageIsOrContains('AutoLoaderResolution::resolve()');
 
         $listener->process(new BeforeApplicationStart($this->createStub(ApplicationInterface::class)));
     }

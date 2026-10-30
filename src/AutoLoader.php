@@ -63,7 +63,12 @@ final class AutoLoader
      */
     public function __invoke(string $class): void
     {
-        if (!$this->aspects->isTargetClass($class) || self::isLoaded($class)) {
+        if (
+            !$this->aspects->isTargetClass($class)
+            || class_exists($class, false)
+            || interface_exists($class, false)
+            || trait_exists($class, false)
+        ) {
             return;
         }
 
@@ -84,11 +89,58 @@ final class AutoLoader
         try {
             $address = $this->mimic->prepare($sourcePath);
             $this->sources->register($class);
-            $interceptors = $this->interceptorsFor($class);
+            // Resolve only handlers whose declarations select the class being loaded.
+            $targetKey = strtolower(ltrim($class, '\\'));
+            /** @var array<non-empty-string, Closure(ProceedingJoinPointInterface): mixed> $interceptors */
+            $interceptors = [];
+
+            foreach ($this->aspects->getClasses() as $handlerClass => $aspect) {
+                foreach (array_keys($aspect->propertyHooks) as $target) {
+                    if ($targetKey === strtolower(ltrim($target, '\\'))) {
+                        throw new LogicException('AOP property hook interception is not implemented.');
+                    }
+                }
+
+                $selectors = [];
+
+                foreach ($aspect->classes as $target) {
+                    if ($targetKey === strtolower(ltrim($target, '\\'))) {
+                        $selectors[] = $class;
+                    }
+                }
+
+                foreach ($aspect->methods as $target => $methods) {
+                    if ($targetKey !== strtolower(ltrim($target, '\\'))) {
+                        continue;
+                    }
+
+                    foreach ($methods as $method) {
+                        $selectors[] = $class . '::' . $method;
+                    }
+                }
+
+                if ([] === $selectors) {
+                    continue;
+                }
+
+                $handler = $this->container->get($handlerClass);
+
+                if (!$handler instanceof AspectInterface) {
+                    throw new InvalidArgumentException(sprintf(
+                        'Aspect handler %s must implement %s.',
+                        $handlerClass,
+                        AspectInterface::class,
+                    ));
+                }
+
+                foreach ($selectors as $selector) {
+                    $interceptors[strtolower($selector)] = $handler->process(...);
+                }
+            }
 
             require_once $address;
 
-            if (!self::isLoaded($class)) {
+            if (!class_exists($class, false) && !interface_exists($class, false) && !trait_exists($class, false)) {
                 throw new RuntimeException("The mapped source did not declare $class.");
             }
 
@@ -98,73 +150,5 @@ final class AutoLoader
         } finally {
             unset($this->loading[$key]);
         }
-    }
-
-    /**
-     * Resolves only handlers whose declarations select the class being loaded.
-     *
-     * @param class-string $class
-     *
-     * @return array<non-empty-string, Closure(ProceedingJoinPointInterface): mixed>
-     *
-     * @throws InvalidArgumentException When a matching handler does not implement AspectInterface
-     * @throws LogicException           When the target declares unsupported property hook interception
-     * @throws Throwable                When a matching handler cannot be resolved
-     */
-    private function interceptorsFor(string $class): array
-    {
-        $key = strtolower(ltrim($class, '\\'));
-        $interceptors = [];
-
-        foreach ($this->aspects->getClasses() as $handlerClass => $aspect) {
-            foreach (array_keys($aspect->propertyHooks) as $target) {
-                if ($key === strtolower(ltrim($target, '\\'))) {
-                    throw new LogicException('AOP property hook interception is not implemented.');
-                }
-            }
-
-            $selectors = [];
-
-            foreach ($aspect->classes as $target) {
-                if ($key === strtolower(ltrim($target, '\\'))) {
-                    $selectors[] = $class;
-                }
-            }
-
-            foreach ($aspect->methods as $target => $methods) {
-                if ($key !== strtolower(ltrim($target, '\\'))) {
-                    continue;
-                }
-
-                foreach ($methods as $method) {
-                    $selectors[] = $class . '::' . $method;
-                }
-            }
-
-            if ([] === $selectors) {
-                continue;
-            }
-
-            $handler = $this->container->get($handlerClass);
-
-            if (!$handler instanceof AspectInterface) {
-                throw new InvalidArgumentException(sprintf(
-                    'Aspect handler %s must implement %s.',
-                    $handlerClass,
-                    AspectInterface::class,
-                ));
-            }
-
-            foreach ($selectors as $selector) {
-                $interceptors[strtolower($selector)] = $handler->process(...);
-            }
-        }
-
-        return $interceptors;
-    }
-
-    private static function isLoaded(string $class): bool
-    {
-        return class_exists($class, false) || interface_exists($class, false) || trait_exists($class, false);
     }
 }
