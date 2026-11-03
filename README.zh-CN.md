@@ -64,7 +64,7 @@ final class ExampleAspect implements AspectInterface
 
 ## 应用构建
 
-在 `SuperKernel\Event\ApplicationBuild` 期间（SKernel 的 `build` 命令会在项目自己的进程中发布该事件），只要收集到至少一个 Aspect，AOP 就为类图中每个仍有待加载路径的目标准备代理。不会加载目标类、不会解析其处理器，也不会注册类加载器。打包后的应用（例如由该项目构建的 Phar）直接加载这些准备好的代理，而不在运行时织入；没有预先准备代理的目标会通过 Mimic 的 Stream 驱动织入。解析和转换失败会使构建失败。
+在 `SuperKernel\Event\ApplicationBuild` 期间（SKERNEL 的 `build` 命令会在项目自己的进程中发布该事件），只要收集到至少一个 Aspect，AOP 就为类图中每个仍有待加载路径的目标准备代理。不会加载目标类、不会解析其处理器，也不会注册类加载器。打包后的应用（例如由该项目构建的 Phar）直接加载这些准备好的代理，而不在运行时织入；没有预先准备代理的目标会通过 Mimic 的 Stream 驱动织入。解析和转换失败会使构建失败。
 
 ## 切面自动加载
 
