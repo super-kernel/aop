@@ -16,26 +16,27 @@ use PhpParser\NodeFinder;
 use PhpParser\NodeVisitorAbstract;
 use SuperKernel\Aop\Runtime\Dispatcher;
 use SuperKernel\Aop\Runtime\ProceedingJoinPoint;
-use SuperKernel\Aop\Runtime\SourceMetadata;
+use SuperKernel\Aop\Runtime\SourceConstantName;
 use SuperKernel\Aop\Runtime\Tracker;
 
 use function in_array;
 
 final class NodeVisitor extends NodeVisitorAbstract
 {
-    public function __construct(private readonly ?string $sourcePath = null)
+    /** @param non-empty-string|null $sourceLocation The source's package-relative location from SourceMetadata */
+    public function __construct(private readonly ?string $sourceLocation = null)
     {
     }
 
     public function leaveNode(Node $node): ?Node
     {
-        if (null !== $this->sourcePath) {
+        if (null !== $this->sourceLocation) {
             if ($node instanceof Scalar\MagicConst\File) {
-                return new Expr\ConstFetch(new FullyQualified(SourceMetadata::fileConstant($this->sourcePath)));
+                return new Expr\ConstFetch(new FullyQualified(SourceConstantName::file($this->sourceLocation)));
             }
 
             if ($node instanceof Scalar\MagicConst\Dir) {
-                return new Expr\ConstFetch(new FullyQualified(SourceMetadata::directoryConstant($this->sourcePath)));
+                return new Expr\ConstFetch(new FullyQualified(SourceConstantName::directory($this->sourceLocation)));
             }
         }
 
@@ -92,9 +93,9 @@ final class NodeVisitor extends NodeVisitorAbstract
             new Arg(new Scalar\String_($node->name->toString())),
             new Arg(new Expr\FuncCall(new FullyQualified('func_get_args'))),
             new Arg($closure),
-            new Arg(null === $this->sourcePath
+            new Arg(null === $this->sourceLocation
                 ? new Scalar\MagicConst\File()
-                : new Expr\ConstFetch(new FullyQualified(SourceMetadata::fileConstant($this->sourcePath)))),
+                : new Expr\ConstFetch(new FullyQualified(SourceConstantName::file($this->sourceLocation)))),
             new Arg(new Scalar\Int_($node->getStartLine())),
         ]);
         $dispatch = new Expr\StaticCall(new FullyQualified(Dispatcher::class), 'dispatch', [

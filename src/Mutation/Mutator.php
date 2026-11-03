@@ -8,6 +8,7 @@ use PhpParser\NodeTraverser;
 use PhpParser\Parser;
 use PhpParser\ParserFactory;
 use PhpParser\PrettyPrinter\Standard;
+use SuperKernel\Aop\Runtime\SourceMetadata;
 use SuperKernel\Attribute\Provider;
 use SuperKernel\Mimic\Contract\MutatorInterface;
 
@@ -18,7 +19,7 @@ final readonly class Mutator implements MutatorInterface
 
     private Standard $printer;
 
-    public function __construct()
+    public function __construct(private SourceMetadata $sources)
     {
         $this->parser = new ParserFactory()->createForHostVersion();
         $this->printer = new Standard();
@@ -26,7 +27,7 @@ final readonly class Mutator implements MutatorInterface
 
     public function getCacheKey(): string
     {
-        return 'super-kernel/aop-v2';
+        return 'super-kernel/aop-v3';
     }
 
     public function mutate(string $code, ?string $sourcePath = null): string
@@ -37,7 +38,8 @@ final readonly class Mutator implements MutatorInterface
             return $code;
         }
 
-        $traverser = new NodeTraverser(new NodeVisitor($sourcePath));
+        $location = null === $sourcePath ? null : $this->sources->location($sourcePath);
+        $traverser = new NodeTraverser(new NodeVisitor($location));
 
         return $this->printer->prettyPrintFile($traverser->traverse($ast));
     }

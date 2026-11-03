@@ -117,7 +117,7 @@ final class StartupListenerTest extends TestCase
         $container = $this->createMock(ContainerInterface::class);
         $container->expects($this->exactly(2))->method('get')->with(AutoLoader::class)->willReturnCallback(
             static function () use ($aspects, $shared, $vendor, $container, $packages, $sources, &$loader): AutoLoader {
-                $mutator = new Mutator();
+                $mutator = new Mutator($sources);
 
                 return $loader ??= new AutoLoader($aspects, $shared, new MimicFactory(
                     new FileDriver($vendor, $mutator, $packages),
@@ -174,18 +174,19 @@ final class StartupListenerTest extends TestCase
         $aspects = new AspectCollector($collector);
         $vendor = $this->createStub(VendorDirInterface::class);
         $vendor->method('__toString')->willReturn(sys_get_temp_dir());
-        $mutator = new Mutator();
         $shared = $this->createMock(AutoLoaderInterface::class);
         $shared->expects($this->never())->method('getClassMap');
         $container = $this->createMock(ContainerInterface::class);
         $packages = $this->createMock(PackageManagerInterface::class);
         $packages->expects($this->never())->method('allClasses');
+        $sources = new SourceMetadata($packages);
+        $mutator = new Mutator($sources);
         $loader = new AutoLoader(
             $aspects,
             $shared,
             new MimicFactory(new FileDriver($vendor, $mutator, $packages), new StreamDriver($mutator)),
             $container,
-            new SourceMetadata($packages),
+            $sources,
         );
         $container->expects($this->exactly(2))->method('get')->with(AutoLoader::class)->willReturn($loader);
         $listener = new BeforeApplicationStartListener($aspects, $container);

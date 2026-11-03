@@ -505,7 +505,7 @@ final class AutoLoaderTest extends TestCase
     {
         $vendor = $this->createStub(VendorDirInterface::class);
         $vendor->method('__toString')->willReturn($this->directory);
-        $mutator = new Mutator();
+        $mutator = new Mutator($this->sources());
 
         return new MimicFactory(new FileDriver($vendor, $mutator, $this->packages()), new StreamDriver($mutator));
     }

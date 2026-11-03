@@ -8,11 +8,16 @@ use LogicException;
 use RuntimeException;
 use SuperKernel\Contract\PackageManagerInterface;
 
+use function array_search;
 use function constant;
 use function define;
 use function defined;
 use function dirname;
+use function is_file;
 use function realpath;
+use function str_starts_with;
+use function strlen;
+use function substr;
 
 /** Binds original source locations before proxies evaluate constant expressions. */
 final readonly class SourceMetadata
@@ -24,6 +29,9 @@ final readonly class SourceMetadata
     /**
      * Resolves a source through the package graph without loading the requested class.
      *
+     * The constants are named after the source's package-relative location and bound to its current path, so
+     * generated code prepared elsewhere, such as before Phar packaging, refers to the running source.
+     *
      * @param class-string $class
      *
      * @throws RuntimeException When the class has no resolvable source in the package graph
@@ -32,15 +40,25 @@ final readonly class SourceMetadata
     public function register(string $class): void
     {
         $sourcePath = $this->packages->allClasses()[$class] ?? null;
-        $sourcePath = null === $sourcePath ? false : realpath($sourcePath);
+
+        // realpath() cannot resolve Phar archive paths, so those are kept as given.
+        if (null === $sourcePath) {
+            $sourcePath = false;
+        } elseif (str_starts_with($sourcePath, 'phar://')) {
+            $sourcePath = is_file($sourcePath) ? $sourcePath : false;
+        } else {
+            $sourcePath = realpath($sourcePath);
+        }
 
         if (false === $sourcePath) {
             throw new RuntimeException("The package graph has no original source for $class.");
         }
 
+        $location = $this->location($sourcePath);
+
         foreach ([
-            SourceConstantName::file($sourcePath)      => $sourcePath,
-            SourceConstantName::directory($sourcePath) => dirname($sourcePath),
+            SourceConstantName::file($location)      => $sourcePath,
+            SourceConstantName::directory($location) => dirname($sourcePath),
         ] as $name => $value) {
             if (defined($name)) {
                 if (constant($name) !== $value) {
@@ -54,15 +72,23 @@ final readonly class SourceMetadata
         }
     }
 
-    /** @return non-empty-string */
-    public static function fileConstant(string $sourcePath): string
+    /**
+     * Identifies a source by its owning package's name and its path relative to that package's directory.
+     *
+     * @param non-empty-string $sourcePath A canonical source path from the package graph
+     *
+     * @return non-empty-string The package-relative location, or the given path outside a located package
+     */
+    public function location(string $sourcePath): string
     {
-        return SourceConstantName::file($sourcePath);
-    }
+        $class = array_search($sourcePath, $this->packages->allClasses(), true);
+        $package = false === $class ? null : $this->packages->packageForClass($class);
+        $directory = $package?->locatedPath();
 
-    /** @return non-empty-string */
-    public static function directoryConstant(string $sourcePath): string
-    {
-        return SourceConstantName::directory($sourcePath);
+        if (null === $package || null === $directory || !str_starts_with($sourcePath, $directory . '/')) {
+            return $sourcePath;
+        }
+
+        return $package->name() . "\0" . substr($sourcePath, strlen($directory) + 1);
     }
 }
