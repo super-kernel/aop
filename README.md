@@ -64,7 +64,7 @@ During `SuperKernel\Event\BeforeApplicationStart`, at `PHP_INT_MAX` priority bef
 
 ## Application build
 
-During `SuperKernel\Event\ApplicationBuild`, which SKernel's `build` command publishes in the project's own process, AOP prepares the proxy of every collected target that has a pending path in the class map, when at least one Aspect is collected. Targets are not loaded, their handlers are not resolved, and no class loader is registered. A packaged application, such as a Phar built from that project, loads the prepared proxies instead of weaving at runtime; a target without a prepared proxy is woven through Mimic's Stream driver. Parse and transformation failures fail the build.
+During `SuperKernel\Event\ApplicationBuild`, which SKERNEL's `build` command publishes in the project's own process, AOP prepares the proxy of every collected target that has a pending path in the class map, when at least one Aspect is collected. Targets are not loaded, their handlers are not resolved, and no class loader is registered. A packaged application, such as a Phar built from that project, loads the prepared proxies instead of weaving at runtime; a target without a prepared proxy is woven through Mimic's Stream driver. Parse and transformation failures fail the build.
 
 ## Aspect autoloading
 
