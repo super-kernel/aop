@@ -62,6 +62,10 @@ final class ExampleAspect implements AspectInterface
 
 在 `SuperKernel\Event\BeforeApplicationStart` 期间，AOP 以 `PHP_INT_MAX` 优先级（先于优先级更低的监听器），在至少收集到一个 Aspect 时，把它的类加载器注册到 SPL 栈的最前面。没有任何 Aspect 时，什么都不会激活，Mimic 也不会初始化。解析默认类加载器时，会先执行 Autoloader 组件的 SPL 接管；然后 AOP 把自己的回调放到最前面。重复分发启动事件不会添加重复的回调，也不会改变已注册的通知。
 
+## 应用构建
+
+在 `SuperKernel\Event\ApplicationBuild` 期间（SKernel 的 `build` 命令会在项目自己的进程中发布该事件），只要收集到至少一个 Aspect，AOP 就为类图中每个仍有待加载路径的目标准备代理。不会加载目标类、不会解析其处理器，也不会注册类加载器。打包后的应用（例如由该项目构建的 Phar）直接加载这些准备好的代理，而不在运行时织入；没有预先准备代理的目标会通过 Mimic 的 Stream 驱动织入。解析和转换失败会使构建失败。
+
 ## 切面自动加载
 
 对于每次类请求，AOP 加载器只织入尚未加载、且在类图中有待加载路径的已声明目标和自织入类；其他请求会交给其余的 SPL 加载器。被选中的类通过 Mimic 准备，从容器中解析其匹配的处理器，执行准备好的源码，并在请求返回之前注册匹配的类选择器和方法选择器。

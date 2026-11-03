@@ -51,6 +51,24 @@ final class AutoLoader
     }
 
     /**
+     * Prepares the source of every pending target without loading it or resolving its handlers, so a restore-only
+     * host, such as a Phar, reuses the prepared proxies.
+     *
+     * @throws InvalidArgumentException When a target source is unreadable
+     * @throws Error                    When a target source cannot be parsed
+     * @throws LogicException           When a method uses unsupported semantics
+     * @throws Throwable                When source transformation fails
+     */
+    public function prepare(): void
+    {
+        foreach ($this->autoLoader->getClassMap() as $class => $sourcePath) {
+            if ($this->aspects->isTargetClass($class)) {
+                $this->mimic->prepare($sourcePath);
+            }
+        }
+    }
+
+    /**
      * Transforms an unloaded target using its pending path from the shared loader.
      *
      * @param class-string $class

@@ -9,7 +9,7 @@ use Psr\Container\ContainerInterface;
 use SuperKernel\Aop\AutoLoader;
 
 /**
- * Resolves the shared aspect loader from the container once startup has collected aspect declarations.
+ * Resolves the shared aspect loader from the container once startup or a build has collected aspect declarations.
  *
  * @internal
  */

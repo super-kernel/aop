@@ -62,6 +62,10 @@ Property hook pointcuts are accepted by the Attribute, but hook bodies are not w
 
 During `SuperKernel\Event\BeforeApplicationStart`, at `PHP_INT_MAX` priority before lower-priority listeners, AOP registers its class loader at the front of the SPL stack when at least one Aspect is collected. With no Aspects, nothing is activated and Mimic is not initialized. Resolving the default class loader first performs the Autoloader component's SPL takeover; AOP then prepends its own callback. Repeated startup dispatch adds no duplicate callbacks and leaves registered advice unchanged.
 
+## Application build
+
+During `SuperKernel\Event\ApplicationBuild`, which SKernel's `build` command publishes in the project's own process, AOP prepares the proxy of every collected target that has a pending path in the class map, when at least one Aspect is collected. Targets are not loaded, their handlers are not resolved, and no class loader is registered. A packaged application, such as a Phar built from that project, loads the prepared proxies instead of weaving at runtime; a target without a prepared proxy is woven through Mimic's Stream driver. Parse and transformation failures fail the build.
+
 ## Aspect autoloading
 
 For each class request, the AOP loader weaves only declared targets and self-weaving classes that are not loaded yet and have a pending path in the class map; other requests fall through to the remaining SPL loaders. A selected class is prepared through Mimic, its matching handlers are resolved from the container, the prepared source is executed, and the matching class and method selectors are registered before the request returns.
