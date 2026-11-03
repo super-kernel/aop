@@ -9,7 +9,10 @@ use PhpParser\ParserFactory;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
 use SuperKernel\Aop\Mutation\Mutator;
+use SuperKernel\Aop\Runtime\SourceMetadata;
 use SuperKernel\Attribute\Provider;
+use SuperKernel\Contract\PackageManagerInterface;
+use SuperKernel\Contract\PackageMetadataInterface;
 use SuperKernel\Mimic\Contract\MutatorInterface;
 use Throwable;
 
@@ -28,7 +31,7 @@ final class MutationTest extends TestCase
     /** @throws Throwable When fixture setup or the operation under test throws */
     public function testMethodWeavingUsesTheAopRuntime(): void
     {
-        $mutated = new Mutator()->mutate('<?php class Example { public function run(): int { return 1; } }');
+        $mutated = $this->mutator()->mutate('<?php class Example { public function run(): int { return 1; } }');
 
         $this->assertStringContainsString('SuperKernel\\Aop\\Runtime\\Dispatcher::dispatch', $mutated);
         $this->assertStringContainsString('SuperKernel\\Aop\\Runtime\\ProceedingJoinPoint', $mutated);
@@ -40,7 +43,7 @@ final class MutationTest extends TestCase
     {
         $source = '<?php interface Contract { public function run(): void; }'
             . ' abstract class Example implements Contract {}';
-        $mutated = new Mutator()->mutate($source);
+        $mutated = $this->mutator()->mutate($source);
 
         $this->assertNotNull(new ParserFactory()->createForHostVersion()->parse($mutated));
         $this->assertStringNotContainsString('Dispatcher', $mutated);
@@ -58,7 +61,7 @@ final class MutationTest extends TestCase
             'public function run(): string { return __METHOD__; }',
         ] as $method) {
             try {
-                new Mutator()->mutate('<?php class Example { ' . $method . ' }');
+                $this->mutator()->mutate('<?php class Example { ' . $method . ' }');
                 $this->fail('Unsupported semantics must be rejected.');
             } catch (LogicException $exception) {
                 $this->assertStringContainsString('AOP', $exception->getMessage());
@@ -66,4 +69,36 @@ final class MutationTest extends TestCase
         }
     }
 
+    /** @throws Throwable When fixture setup or the operation under test throws */
+    public function testSourceConstantsDependOnlyOnThePackageRelativeLocation(): void
+    {
+        $source = '<?php class Example { public const string FILE = __FILE__; '
+            . 'public function directory(): string { return __DIR__; } }';
+        $first = $this->mutator('/first/app')->mutate($source, '/first/app/src/Example.php');
+        $moved = $this->mutator('/second/app')->mutate($source, '/second/app/src/Example.php');
+        $renamed = $this->mutator('/first/app', 'lib')->mutate($source, '/first/app/lib/Example.php');
+
+        $this->assertSame($first, $moved);
+        $this->assertNotSame($first, $renamed);
+        $this->assertStringNotContainsString('__FILE__', $first);
+        $this->assertStringNotContainsString('__DIR__', $first);
+        $this->assertStringNotContainsString('/first/app', $first);
+    }
+
+    private function mutator(?string $directory = null, string $sourceDirectory = 'src'): Mutator
+    {
+        $packages = $this->createStub(PackageManagerInterface::class);
+
+        if (null !== $directory) {
+            $package = $this->createStub(PackageMetadataInterface::class);
+            $package->method('name')->willReturn('acme/app');
+            $package->method('locatedPath')->willReturn($directory);
+            $packages->method('allClasses')->willReturn([
+                'Example' => $directory . '/' . $sourceDirectory . '/Example.php',
+            ]);
+            $packages->method('packageForClass')->willReturn($package);
+        }
+
+        return new Mutator(new SourceMetadata($packages));
+    }
 }

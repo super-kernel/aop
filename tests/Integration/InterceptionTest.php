@@ -230,7 +230,7 @@ final class InterceptionTest extends TestCase
 
     private function factory(): MimicFactory
     {
-        $mutator = new Mutator();
+        $mutator = new Mutator(new SourceMetadata($this->packages()));
 
         return new MimicFactory(
             new FileDriver($this->vendor, $mutator, $this->packages()),
@@ -242,13 +242,14 @@ final class InterceptionTest extends TestCase
     private function mimic(bool $stream): void
     {
         $mimic = $this->factory();
+        $sources = new SourceMetadata($this->packages());
         $path = $stream
-            ? new StreamDriver(new Mutator())->prepare(new SourceFile($this->fixture()))
+            ? new StreamDriver(new Mutator($sources))->prepare(new SourceFile($this->fixture()))
             : $mimic->prepare($this->fixture());
         $code = file_get_contents($path);
         $this->assertIsString($code);
         $this->assertStringNotContainsString($this->fixture(), $code);
-        new SourceMetadata($this->packages())->register(Subject::class);
+        $sources->register(Subject::class);
         require_once $path;
 
     }
