@@ -45,8 +45,10 @@ use Throwable;
 use function array_map;
 use function array_slice;
 use function class_exists;
+use function clearstatcache;
 use function dirname;
 use function file_put_contents;
+use function filemtime;
 use function glob;
 use function is_dir;
 use function is_file;
@@ -57,6 +59,7 @@ use function spl_autoload_register;
 use function spl_autoload_unregister;
 use function sys_get_temp_dir;
 use function tempnam;
+use function touch;
 use function unlink;
 
 #[RunTestsInSeparateProcesses]
@@ -135,6 +138,38 @@ final class AutoLoaderTest extends TestCase
         $this->assertStringStartsWith($stream ? 'mimic://' : $this->directory . '/.cache/mimic/', $source);
         $this->assertSame([], $shared->getClassMap());
         $this->assertSame($loader, spl_autoload_functions()[0]);
+    }
+
+    /** @throws Throwable When proxy preparation or target loading fails */
+    public function testPreparedProxiesAreReusedWhenTheTargetLoads(): void
+    {
+        $shared = new AutoloaderAutoLoader([
+            SuperKernel\Aop\Tests\Fixture\SelectedService::class => $this->selectedServiceFile(),
+            SuperKernel\Aop\Tests\Fixture\UnmarkedService::class => dirname(__DIR__) . '/Fixture/UnmarkedService.php',
+        ]);
+        $loader = new AutoLoader($this->aspects([
+            SuperKernel\Aop\Tests\Fixture\SelectedService::class,
+        ]), $shared, $this->mimic(), $this->unusedContainer(), $this->sources());
+        $stack = spl_autoload_functions();
+        $proxy = $this->directory . '/.cache/mimic/SuperKernel.Aop.Tests.Fixture.SelectedService.tpl';
+
+        $loader->prepare();
+
+        $this->assertSame([
+            $proxy,
+        ], glob($this->directory . '/.cache/mimic/*'));
+        $this->assertFalse(class_exists(SelectedService::class, false));
+        $this->assertFalse(class_exists(UnmarkedService::class, false));
+        $this->assertCount(2, $shared->getClassMap());
+        $this->assertSame($stack, spl_autoload_functions());
+        $this->assertTrue(touch($proxy, 100));
+        spl_autoload_register($shared, true, true);
+        $loader->register();
+
+        $this->assertSame(4, new SelectedService()->value(3));
+        $this->assertSame($proxy, new ReflectionClass(SelectedService::class)->getFileName());
+        clearstatcache(true, $proxy);
+        $this->assertSame(100, filemtime($proxy));
     }
 
     /** @throws Throwable When startup registration, target loading, or advice fails */
