@@ -8,17 +8,17 @@
         "ext-reflection": "*",
         "nikic/php-parser": "^5.9.0",
         "psr/container": "^2.0.2",
-        "super-kernel/annotator": "dev-main",
-        "super-kernel/attribute": "dev-main",
-        "super-kernel/contract": "dev-main",
-        "super-kernel/event": "dev-main",
-        "super-kernel/mimic": "dev-main"
+        "super-kernel/annotator": "self.version",
+        "super-kernel/attribute": "self.version",
+        "super-kernel/contract": "self.version",
+        "super-kernel/event": "self.version",
+        "super-kernel/mimic": "self.version"
     },
     "require-dev": {
         "friendsofphp/php-cs-fixer": "^3.95.27",
         "phpunit/phpunit": "^13.4.5",
-        "super-kernel/autoloader": "dev-main",
-        "super-kernel/event-dispatcher": "dev-main"
+        "super-kernel/autoloader": "self.version",
+        "super-kernel/event-dispatcher": "self.version"
     },
     "autoload": {
         "psr-4": {
