@@ -4,115 +4,155 @@
 
 # SuperKernel AOP
 
-`super-kernel/aop` provides aspect declarations, method weaving, join points, and interceptor dispatch with startup-activated class loading. `super-kernel/mimic` supplies the cached file proxies and Stream fallback. The application's `SuperKernel\Contract\AutoLoaderInterface` binding, by default from `super-kernel/autoloader`, supplies the class map.
+`super-kernel/aop` runs code around the methods of your classes: an aspect declares which classes and methods it targets, and the package weaves those classes when they are loaded, so every call passes through the aspect.
 
-## Aspect attribute
+## Installation
 
-`SuperKernel\Aop\Attribute\Aspect` marks a class that handles aspect behavior. The native Attribute is placed on that handler class; its arguments describe the classes, methods, and property hooks that the handler targets.
+```bash
+composer require super-kernel/aop
+```
 
-It is a final, readonly, non-repeatable native PHP Attribute targeting classes only. One declaration can contain multiple pointcuts in each of three public readonly arrays:
+The package installs `super-kernel/mimic` and `nikic/php-parser`. It also needs a `SuperKernel\Contract\AutoLoaderInterface`, which `super-kernel/autoloader` provides; the package does not require it, so install it too, or `skernel build` fails as soon as one aspect exists. Weaving starts when `super-kernel/framework` starts the application, and the aspects are found in the metadata that `skernel build` generates. `super-kernel/skeleton` installs all of them.
 
-- `classes`: a list of target class names.
-- `methods`: target class names mapped to non-empty lists of method names.
-- `propertyHooks`: target class names mapped to property names, each containing a non-empty list of `get` and/or `set` hook names. Property names omit `$`.
+## What it provides
+
+- Aspects declared with `#[Aspect]`, targeting whole classes or named methods.
+- Around advice through `AspectInterface::process()`, with the call's arguments, reflection, and `proceed()`.
+- Weaving of a target class when it is first loaded after the application starts, with no change to your source files.
+- Proxies prepared by `skernel build`, so a packaged application loads them instead of weaving.
+- Callbacks registered by hand with `Dispatcher::intercept()` for classes that weave themselves.
+
+It does not:
+
+- weave property hooks; declaring one makes its target fail to load;
+- weave methods that return by reference, take reference or variadic parameters, are generators, or use static locals or `__FUNCTION__`, `__METHOD__`, or `__LINE__`;
+- match by wildcard, parent class, or interface;
+- weave a class that is already loaded;
+- isolate callbacks per request, coroutine, or fiber; they are process-wide.
+
+## Quick start
+
+Declare a service. Save it as `src/Billing/PriceCalculator.php`:
 
 ```php
-use SuperKernel\Aop\Attribute\Aspect;
-use SuperKernel\Aop\Contract\AspectInterface;
-use SuperKernel\Aop\Contract\ProceedingJoinPointInterface;
+<?php
 
-#[Aspect(
-    classes: [
-        App\Service\OrderService::class,
-        App\Service\InvoiceService::class,
-    ],
-    methods: [
-        App\Service\UserService::class => [
-            'create',
-            'update',
-        ],
-    ],
-)]
-final class ExampleAspect implements AspectInterface
+declare(strict_types=1);
+
+namespace Src\Billing;
+
+final class PriceCalculator
 {
-    public function process(ProceedingJoinPointInterface $point): mixed
+    public function total(int $net, int $taxPercent): int
     {
-        return $point->proceed();
+        return $net + intdiv($net * $taxPercent, 100);
     }
 }
 ```
 
-All three arguments default to empty arrays for manual self-weaving. Names, ordering, and duplicate list entries are preserved. Class names may have a leading namespace separator; wildcards and selector strings such as `Class::method` are not accepted in these structured declarations.
-
-Construction checks identifier syntax, list shapes, and the supported hook names, throwing `InvalidArgumentException` for malformed declarations. It does not load target classes or check whether their members exist, so metadata collection can leave targets unloaded for later weaving.
-
-Handlers with class or method pointcuts implement `Contract\AspectInterface`. The container supplies their dependencies, and `process(ProceedingJoinPointInterface): mixed` provides around advice. Call `proceed()` to invoke the original method, preserving its result or deliberately supplying a replacement. Use `try/finally` for after logic that must also run when the original method throws.
-
-Matching handlers are resolved and their advice registered when a declared target class is loaded. Parameter-free declarations select self-weaving: their declaring class is woven and callbacks may be registered manually without implementing `AspectInterface`.
-
-Property hook pointcuts are accepted by the Attribute, but hook bodies are not woven. Loading a declared property hook target raises `LogicException` before the target is declared. Unloaded targets do not prevent startup or unrelated class loads.
-
-## Aspect collector
-
-`SuperKernel\Aop\Collector\AspectCollector` is a final, readonly service; resolve it through DI when aspect declarations are needed. `getClasses()` returns the original `Aspect` instances keyed by declaring class name, preserving discovery order and package ownership. It returns an array by value and never reflects or autoloads target classes or runs another scan.
-
-`isTargetClass()` checks the collected class, method, and property hook targets without loading them. It ignores class-name case and a leading namespace separator. A handler is not itself a target unless one of its pointcuts selects it.
-
-## Application startup
-
-During `SuperKernel\Event\BeforeApplicationStart`, at `PHP_INT_MAX` priority before lower-priority listeners, AOP registers its class loader at the front of the SPL stack when at least one Aspect is collected. With no Aspects, nothing is activated and Mimic is not initialized. Resolving the default class loader first performs the Autoloader component's SPL takeover; AOP then prepends its own callback. Repeated startup dispatch adds no duplicate callbacks and leaves registered advice unchanged.
-
-## Application build
-
-During `SuperKernel\Event\ApplicationBuild`, which SKERNEL's `build` command publishes in the project's own process, AOP prepares the proxy of every collected target that has a pending path in the class map, when at least one Aspect is collected. Targets are not loaded, their handlers are not resolved, and no class loader is registered. A packaged application, such as a Phar built from that project, loads the prepared proxies instead of weaving at runtime; a target without a prepared proxy is woven through Mimic's Stream driver. Parse and transformation failures fail the build.
-
-## Aspect autoloading
-
-For each class request, the AOP loader weaves only declared targets and self-weaving classes that are not loaded yet and have a pending path in the class map; other requests fall through to the remaining SPL loaders. A selected class is prepared through Mimic, its matching handlers are resolved from the container, the prepared source is executed, and the matching class and method selectors are registered before the request returns.
-
-- Each resolved handler must implement `AspectInterface`. Unrelated declarations do not resolve their handlers.
-- If several handlers select the same case-insensitive selector, the last one in discovery order replaces earlier registrations. Repeated requests for an already loaded target do not replace its callbacks.
-- Handlers are resolved before the target is declared, so a resolution or validation failure leaves it unloaded and can be retried. A handler constructor must not request the target currently being loaded, directly or through another dependency; such a dependency is circular.
-- Advice is published only after the prepared source successfully declares the requested target.
-
-Mimic writes proxies to `<VendorDirInterface>/.cache/mimic/<class-name>.tpl` and falls back to `mimic://` streams; see the [Mimic README](https://github.com/super-kernel/mimic/blob/main/README.md) for cache behavior.
-
-## Interceptors and join points
-
-The weaver rewrites concrete methods to dispatch through `Runtime\Dispatcher` with a `Runtime\ProceedingJoinPoint`. Register callbacks before invoking selected methods:
+Declare an aspect of its `total()` method. Save it as `src/Aspect/LogCalculation.php`:
 
 ```php
-use App\Service;
-use SuperKernel\Aop\Runtime\Dispatcher;
-use SuperKernel\Aop\Runtime\ProceedingJoinPoint;
+<?php
 
-Dispatcher::intercept([
-    Service::class,
-    'calculate',
-], static function (ProceedingJoinPoint $point): mixed {
-    return $point->proceed();
-});
+declare(strict_types=1);
+
+namespace Src\Aspect;
+
+use Src\Billing\PriceCalculator;
+use SuperKernel\Aop\Attribute\Aspect;
+use SuperKernel\Aop\Contract\AspectInterface;
+use SuperKernel\Aop\Contract\ProceedingJoinPointInterface;
+
+#[Aspect(methods: [PriceCalculator::class => ['total']])]
+final readonly class LogCalculation implements AspectInterface
+{
+    public function process(ProceedingJoinPointInterface $point): mixed
+    {
+        $arguments = implode(', ', $point->getArguments());
+        $result = $point->proceed();
+
+        echo "{$point->getShortMethodName()}({$arguments}) = {$result}", PHP_EOL;
+
+        return $result;
+    }
+}
 ```
 
-`Dispatcher::intercept()` accepts a class name, `Class::method`, or `[Class, method]`, and returns `void`. Selectors are case-insensitive. Method selectors override class selectors, and re-registering a selector replaces its callback. Matching uses the runtime class, including the called class for static methods, without ancestor or interface expansion. Without a callback, dispatch proceeds into the original body.
+Use the service in a command. Save it as `src/Command/TotalCommand.php`:
 
-`Runtime\ProceedingJoinPoint` implements `Contract\ProceedingJoinPointInterface`; Aspect implementations accept the interface. `getInstance()` returns an object for an instance method or a class-string for a static method. `getArguments()`, `getClassReflection()`, `getMethodReflection()`, and `getShortMethodName()` describe the original call. `proceed()` invokes its body. A callback can bypass that body by returning without proceeding; the enclosing method still enforces its return type. Constructors, destructors, and `void` methods discard callback results. PHP performs constructor promotion before interception. A `never` interceptor must not return normally.
+```php
+<?php
 
-Registrations and `Runtime\Tracker` are process-global. Loading a selected target installs its advice for that process; forked workers inherit callbacks already registered in their parent. Advice discovery supports class and method pointcuts through `AspectInterface`. There is no separate Pointcut Attribute.
+declare(strict_types=1);
 
-## Supported source and diagnostics
+namespace Src\Command;
 
-- Use trusted, declaration-oriented files. All concrete methods in a selected file are woven; abstract methods remain unchanged. Final modifiers and private visibility are preserved. `Mutation\Modifier` is an optional PHP-Parser visitor that relaxes final modifiers and private visibility; the default mutator does not install it.
-- Original parameter values and promoted default objects are preserved. `__FILE__` and `__DIR__` refer to the original source, local or inside a Phar archive, including inside class constants, property initializers, and parameter defaults. Generated code references namespaced source constants instead of embedding absolute paths, and `Runtime\SourceMetadata` binds those constants from the original class map before loading. The constants are named after the source's package name and package-relative path, so code woven before the project moves or is packaged into a Phar archive binds the source that is actually running. Direct Mimic integrations using the AOP mutator must call `SourceMetadata::register($class)` on their injected instance before executing the prepared source. Constant bindings remain process-local.
-- Reference returns, reference or variadic parameters, hooked promoted parameters, generators, static locals, and `__FUNCTION__`, `__METHOD__`, or `__LINE__` in method bodies are rejected before loading. This conservative check includes nested closures.
-- Exceptions from transformed bodies retain their object and receive their original file and last entered top-level statement line. Nested statements may report the enclosing statement. Callback and external failures retain their own locations; nested dispatch restores the caller's diagnostic state.
-- Stack frames and reflection line numbers still describe generated code. Diagnostic lines are not isolated across suspended fibers or Swoole coroutines. Normal initialization does not replace the global exception handler.
-- Parser and transformation failures propagate without falling through to untransformed loading. Unmarked classes and missing map entries continue through other SPL loaders. Already loaded symbols cannot be rewritten.
+use Src\Billing\PriceCalculator;
+use SuperKernel\Command\Attribute\Command;
+use Symfony\Component\Console\Command\Command as SymfonyCommand;
+use Symfony\Component\Console\Input\InputInterface;
+use Symfony\Component\Console\Output\OutputInterface;
 
-## Cache identity
+#[Command(name: 'invoice:total', description: 'Print an invoice total.')]
+final class TotalCommand extends SymfonyCommand
+{
+    public function __construct(private readonly PriceCalculator $calculator)
+    {
+        parent::__construct();
+    }
 
-`Mutation\Mutator::getCacheKey()` identifies generated-code semantics, so a release that changes weaving semantics regenerates file and Stream proxies. Rebuild annotation and Phar snapshots after declaration changes, and restart workers to load rebuilt code.
+    protected function execute(InputInterface $input, OutputInterface $output): int
+    {
+        $output->writeln("Total: {$this->calculator->total(1000, 19)}");
+
+        return self::SUCCESS;
+    }
+}
+```
+
+Build the project and run the command:
+
+```bash
+skernel build
+php bin/bootstrap.php invoice:total
+```
+
+It prints:
+
+```text
+total(1000, 19) = 1190
+Total: 1190
+```
+
+## Public surface
+
+| Name | Kind | Purpose |
+| --- | --- | --- |
+| `SuperKernel\Aop\Attribute\Aspect` | Attribute | Declares an aspect and its targets: `classes`, `methods`, and `propertyHooks`; without arguments, the annotated class weaves itself. |
+| `SuperKernel\Aop\Contract\AspectInterface` | Interface | Implemented by an aspect with targets; `process()` runs around each selected call. |
+| `SuperKernel\Aop\Contract\ProceedingJoinPointInterface` | Interface | Describes the intercepted call; `proceed()` runs the original method. |
+| `SuperKernel\Aop\Runtime\Dispatcher` | Class | `intercept()` registers a callback for a class or method of a woven class. |
+| `SuperKernel\Aop\Runtime\ProceedingJoinPoint` | Class | The join point passed to callbacks registered with `Dispatcher::intercept()`. |
+| `SuperKernel\Aop\Collector\AspectCollector` | Class | Provided by the container; `getClasses()` returns the collected aspects and `isTargetClass()` tells whether a class is woven. |
+| `SuperKernel\Contract\AutoLoaderInterface` | Interface | Supplies the class map from which targets are woven; `super-kernel/autoloader` provides it. |
+| `SuperKernel\Aop\Mutation\Mutator` | Class | The source transformation used with `super-kernel/mimic`; `getCacheKey()` identifies its output. |
+| `SuperKernel\Aop\Mutation\Modifier` | Class | An optional PHP-Parser visitor that removes `final` and makes `private` methods and properties `protected`; not installed by default. |
+| `SuperKernel\Aop\Runtime\SourceMetadata` | Class | Binds the original file of a class before its woven source runs, for direct Mimic integrations. |
+
+## Behavior to know
+
+- Weaving starts when the container first creates `ApplicationInterface`. A target class loaded before that, for example by a script that never starts the application, is not woven, and its aspects never run.
+- An aspect's handler is created through the container when its target is loaded, and must implement `AspectInterface`; otherwise loading the target raises `InvalidArgumentException` with `Aspect handler <class> must implement SuperKernel\Aop\Contract\AspectInterface.`
+- A method the package cannot weave raises `LogicException` when its class is prepared, such as `AOP cannot preserve generators, static locals, or method/line magic constants.`, which fails `skernel build`. A target with a property hook declaration raises `AOP property hook interception is not implemented.` when it is loaded.
+- An `#[Aspect]` with malformed arguments raises `InvalidArgumentException` during `skernel build`, which skips the class and reports it, so the aspect does not apply.
+- `__FILE__` and `__DIR__` keep pointing to your source; reflection and stack frames point to the generated proxy.
+- Run `skernel build` again after adding, removing, or changing an aspect or a target, or start with `skernel run`, which builds first; restart long-running workers to load the new code.
+
+## Documentation
+
+The developer documentation describes targets, advice, self-weaving, when and how classes are woven, build-time proxies, supported source, every error message, and what not to do: [SuperKernel AOP](https://github.com/super-kernel/.github/blob/main/docs/components/aop.md).
 
 ## License
 
-The component is licensed under the [MIT License](LICENSE), as designated by wheakerd. Its source derives from the authorized Mimic port; provenance and authorization are retained in [NOTICE](NOTICE).
+Released under the MIT License. See [LICENSE](LICENSE). The provenance of the weaving source and its authorization are recorded in [NOTICE](NOTICE).
