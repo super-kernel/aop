@@ -12,7 +12,7 @@
 composer require super-kernel/aop
 ```
 
-本包会安装 `super-kernel/mimic` 和 `nikic/php-parser`。它还需要一个 `SuperKernel\Contract\AutoLoaderInterface`，由 `super-kernel/autoloader` 提供；本包并不依赖它，因此也要安装它，否则只要存在一个切面，`skernel build` 就会失败。织入在 `super-kernel/framework` 启动应用时开始，切面从 `skernel build` 生成的元数据中发现。`super-kernel/skeleton` 会安装所有这些包。
+本包会安装 `super-kernel/mimic` 和 `nikic/php-parser`。只要存在一个切面，它还需要一个 `SuperKernel\Contract\AutoLoaderInterface` 的提供者，例如 `super-kernel/autoloader`；本包建议（suggest）但并不依赖该包，请用 `composer require super-kernel/autoloader` 安装它。缺少提供者时，`skernel build` 和应用启动都会失败，消息为 `Unable to resolve method parameter SuperKernel\Aop\AutoLoader::__construct($autoLoader) of type SuperKernel\Contract\AutoLoaderInterface.`织入在 `super-kernel/framework` 启动应用时开始，切面从 `skernel build` 生成的元数据中发现。`super-kernel/skeleton` 会安装所有这些包。
 
 ## 提供的能力
 

@@ -20,6 +20,9 @@
         "super-kernel/autoloader": "self.version",
         "super-kernel/event-dispatcher": "self.version"
     },
+    "suggest": {
+        "super-kernel/autoloader": "Provides the SuperKernel\\Contract\\AutoLoaderInterface that weaving needs as soon as one aspect exists."
+    },
     "autoload": {
         "psr-4": {
             "SuperKernel\\Aop\\": "src/"

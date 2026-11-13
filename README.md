@@ -12,7 +12,7 @@
 composer require super-kernel/aop
 ```
 
-The package installs `super-kernel/mimic` and `nikic/php-parser`. It also needs a `SuperKernel\Contract\AutoLoaderInterface`, which `super-kernel/autoloader` provides; the package does not require it, so install it too, or `skernel build` fails as soon as one aspect exists. Weaving starts when `super-kernel/framework` starts the application, and the aspects are found in the metadata that `skernel build` generates. `super-kernel/skeleton` installs all of them.
+The package installs `super-kernel/mimic` and `nikic/php-parser`. As soon as one aspect exists, it also needs a provider of `SuperKernel\Contract\AutoLoaderInterface`, such as `super-kernel/autoloader`, which the package suggests but does not require; install it with `composer require super-kernel/autoloader`. Without a provider, `skernel build` and the application's start fail with `Unable to resolve method parameter SuperKernel\Aop\AutoLoader::__construct($autoLoader) of type SuperKernel\Contract\AutoLoaderInterface.` Weaving starts when `super-kernel/framework` starts the application, and the aspects are found in the metadata that `skernel build` generates. `super-kernel/skeleton` installs all of them.
 
 ## What it provides
 
